@@ -6,6 +6,8 @@ DROP INDEX IF EXISTS idx_urls_user_id;
 
 DROP INDEX IF EXISTS idx_urls_short_code;
 
+DROP TABLE IF EXISTS email_table;
+
 DROP TABLE IF EXISTS clicks;
 
 DROP TABLE IF EXISTS sessions;

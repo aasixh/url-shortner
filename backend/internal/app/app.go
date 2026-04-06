@@ -31,7 +31,6 @@ func New() (*App, error) {
 	}
 
 	log := logger.NewLogger(cfg.Log)
-	log.Info("Application Started")
 
 	mail := resend.NewClient(cfg.Resend.ApiKey)
 
@@ -66,7 +65,7 @@ func New() (*App, error) {
 		return nil, fmt.Errorf("failed to ping Postgress: %w", err)
 	}
 
-	log.Info("Postgress connection established")
+	log.Info("postgress connection established")
 
 	rdb := redis.NewClient(&redis.Options{
 		Addr:     cfg.Redis.Host + ":" + cfg.Redis.Port,
@@ -78,7 +77,7 @@ func New() (*App, error) {
 		rdb.Close()
 	}
 
-	log.Info("Redis connection established")
+	log.Info("redis connection established")
 
 	repositoryVariable := repository.NewRepository(dbpool, rdb, log)
 	serviceVariable := service.NewService(repositoryVariable, log, mail)

@@ -52,6 +52,14 @@ type URL struct {
 	ClickCount int
 }
 
+type LongURL struct {
+	LongURL string `json:"longURL"`
+}
+
+type ShortCode struct {
+	ShortCode string `json:"shortCode"`
+}
+
 type ErrorResponse struct {
 	Error string `json:"error"`
 }

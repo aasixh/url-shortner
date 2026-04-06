@@ -1,28 +1,48 @@
 package app
 
 import (
+	"context"
 	"encoding/json"
 	"log"
 	"log/slog"
 	"net/http"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/zedmakesense/url-shortner/internal/handler"
 )
 
 func loggingMiddleware(log *slog.Logger, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
+		reqID := uuid.New().String()
+
+		ctx := context.WithValue(r.Context(), "req_id", reqID)
+		r = r.WithContext(ctx)
 
 		rw := &responseWriter{ResponseWriter: w, status: http.StatusOK}
-
 		next.ServeHTTP(rw, r)
 
-		log.InfoContext(r.Context(), "request",
-			"method", r.Method,
-			"path", r.URL.Path,
-			"status", rw.status,
-			"duration_ms", time.Since(start).Milliseconds(),
+		w.Header().Set("X-Request-ID", reqID)
+
+		var level slog.Level
+		switch {
+		case rw.status >= 500:
+			level = slog.LevelError
+		case rw.status >= 400:
+			level = slog.LevelWarn
+		default:
+			level = slog.LevelInfo
+		}
+
+		log.Log(ctx, level, "http_request",
+			slog.String("req_id", reqID),
+			slog.String("method", r.Method),
+			slog.String("path", r.URL.Path),
+			slog.Int("status", rw.status),
+			slog.Int64("duration_ms", time.Since(start).Milliseconds()),
+			slog.String("ip", r.RemoteAddr),
+			slog.String("user_agent", r.Header.Get("User-Agent")),
 		)
 	})
 }

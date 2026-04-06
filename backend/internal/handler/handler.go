@@ -40,7 +40,7 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
-	if utils.IsStructEmpty(userRequest) {
+	if userRequest.Name == "" || userRequest.Email == "" || userRequest.Password == "" {
 		w.WriteHeader(http.StatusBadRequest)
 		handlerLogger.ErrorContext(r.Context(), "invalid json in Register")
 		if encErr := json.NewEncoder(w).Encode(domain.ErrorResponse{Error: "invalid request body"}); encErr != nil {
@@ -459,30 +459,30 @@ func (h *Handler) InsertURL(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var url domain.URL
-	if err := json.NewDecoder(r.Body).Decode(&url); err != nil {
+	var longURL domain.LongURL
+	if err := json.NewDecoder(r.Body).Decode(&longURL); err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		if encErr := json.NewEncoder(w).Encode(domain.ErrorResponse{Error: "invalid request body"}); encErr != nil {
 			return
 		}
 		return
 	}
-	if utils.IsStructEmpty(url) {
+	if longURL.LongURL == "" {
 		w.WriteHeader(http.StatusBadRequest)
 		if encErr := json.NewEncoder(w).Encode(domain.ErrorResponse{Error: "invalid request body"}); encErr != nil {
 			return
 		}
 		return
 	}
-
-	url.ShortCode, err = h.service.InsertURL(r.Context(), url.LongURL, userID)
+	var shortCode domain.ShortCode
+	shortCode.ShortCode, err = h.service.InsertURL(r.Context(), longURL.LongURL, userID)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(map[string]string{"error": "internal server error"})
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(url)
+	json.NewEncoder(w).Encode(shortCode.ShortCode)
 }
 
 func (h *Handler) GetURLs(w http.ResponseWriter, r *http.Request) {
