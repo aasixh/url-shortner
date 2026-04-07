@@ -16,6 +16,11 @@ type responseWriter struct {
 	status int
 }
 
+func (rw *responseWriter) WriteHeader(code int) {
+	rw.status = code
+	rw.ResponseWriter.WriteHeader(code)
+}
+
 func NewRouter(service service.ServiceInterface, log *slog.Logger, mail *resend.Client) http.Handler {
 	mux := http.NewServeMux()
 

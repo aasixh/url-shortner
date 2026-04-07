@@ -30,7 +30,7 @@ func NewRepository(db *pgxpool.Pool, rdb *redis.Client, log *slog.Logger) *repos
 func (r *repositoryStruct) InsertUser(ctx context.Context, email string, name string, hashedPassword string) (int, error) {
 	repoLogger := r.log.With("component", "user_repository")
 	const query = `
-		INSERT INTO users (email, name, hashedPassword)
+		INSERT INTO users (email, name, password_hash)
 		VALUES ($1, $2, $3)
 		RETURNING user_id;
 	`
