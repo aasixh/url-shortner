@@ -582,3 +582,42 @@ func (h *Handler) DeleteURL(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"message": "long url deleted successfully"})
 }
+
+func (h *Handler) DeleteUser(w http.ResponseWriter, r *http.Request) {
+	handlerLogger := h.log.With("component", "handler")
+	var user domain.UserRequest
+	if err := json.NewDecoder(r.Body).Decode(&user); err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "invalid JSON"})
+		return
+	}
+	if user.Password == "" {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "invalid JSON"})
+		return
+	}
+	cookie, _ := r.Cookie("access_token")
+	_, userID, err := h.service.GetByAccessToken(r.Context(), cookie.Value)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": "password reset failed"})
+		handlerLogger.ErrorContext(r.Context(), "getting sessionID failed", "error", err)
+		return
+	}
+	if err := h.service.CheckPassword(r.Context(), userID, user.Password); err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": "password reset failed"})
+		handlerLogger.ErrorContext(r.Context(), "checking password failed", "error", err)
+		return
+	}
+	if err := h.service.DeleteUser(r.Context(), userID); err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": "password reset failed"})
+		handlerLogger.ErrorContext(r.Context(), "deleting user failed", "error", err)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"message": "user deleted successfully"})
+}

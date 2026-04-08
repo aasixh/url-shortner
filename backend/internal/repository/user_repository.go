@@ -386,3 +386,20 @@ func (r *repositoryStruct) DeleteURLByShortCode(ctx context.Context, shortCode s
 	}
 	return nil
 }
+
+func (r *repositoryStruct) DeleteUser(ctx context.Context, userID int) error {
+	query := `
+		DELETE FROM users
+		WHERE user_id = $1
+	`
+	_, err := r.db.Query(ctx, query, userID)
+
+	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			return domain.ErrUserDoesNotExist
+		}
+		return err
+	}
+	return nil
+}

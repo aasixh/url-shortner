@@ -35,6 +35,7 @@ type RepositoryInterface interface {
 	URLClicked(ctx context.Context, shortCode string) error
 	InsertURL(ctx context.Context, shortCode string, longURL string, userID int, createdAt time.Time) error
 	DeleteURLByShortCode(ctx context.Context, shortCode string) error
+	DeleteUser(ctx context.Context, userID int) error
 }
 
 type ServiceInterface interface {
@@ -60,6 +61,8 @@ type ServiceInterface interface {
 	GetURLByUserID(ctx context.Context, userID int) ([]domain.URL, error)
 	GetURLByShortCode(ctx context.Context, shortCode string) (domain.URL, error)
 	DeleteURLByShortCode(ctx context.Context, shortCode string) error
+	DeleteUser(ctx context.Context, userID int) error
+	CheckPassword(ctx context.Context, userID int, password string) error
 }
 
 const alphabet = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
@@ -118,6 +121,14 @@ func (s *serviceStruct) Login(ctx context.Context, email string, password string
 		return 0, err
 	}
 	return user.ID, comparePassword(user.HashedPassword, password)
+}
+
+func (s *serviceStruct) CheckPassword(ctx context.Context, userID int, password string) error {
+	user, err := s.repo.GetUserByUserID(ctx, userID)
+	if err != nil {
+		return err
+	}
+	return comparePassword(user.HashedPassword, password)
 }
 
 func (s *serviceStruct) RevokeToken(ctx context.Context, refreshToken string) error {
@@ -299,4 +310,8 @@ func (s *serviceStruct) GetURLByShortCode(ctx context.Context, shortCode string)
 
 func (s *serviceStruct) DeleteURLByShortCode(ctx context.Context, shortCode string) error {
 	return s.repo.DeleteURLByShortCode(ctx, shortCode)
+}
+
+func (s *serviceStruct) DeleteUser(ctx context.Context, userID int) error {
+	return s.repo.DeleteUser(ctx, userID)
 }
