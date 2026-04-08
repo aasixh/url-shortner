@@ -3,7 +3,6 @@ package app
 import (
 	"context"
 	"encoding/json"
-	"log"
 	"log/slog"
 	"net/http"
 	"time"
@@ -55,7 +54,7 @@ func Auth(h *handler.Handler) func(http.Handler) http.Handler {
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusUnauthorized)
 				_ = json.NewEncoder(w).Encode(map[string]string{"error": "unauthorized"})
-				log.Printf("Token not found in cookie: %v", err)
+				slog.ErrorContext(r.Context(), "Token not found in cookie: ", err)
 				return
 			}
 
@@ -64,7 +63,7 @@ func Auth(h *handler.Handler) func(http.Handler) http.Handler {
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusUnauthorized)
 				_ = json.NewEncoder(w).Encode(map[string]string{"error": "unauthorized"})
-				log.Printf("Token not valid: %v", err)
+				slog.ErrorContext(r.Context(), "Token not valid: %v", err)
 				return
 			}
 
