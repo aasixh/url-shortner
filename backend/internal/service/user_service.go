@@ -195,6 +195,7 @@ func (s *serviceStruct) RevokeEmailTokens(ctx context.Context, userID int) error
 }
 
 func (s *serviceStruct) SendEmail(ctx context.Context, email string, userID int, expiresAt int) error {
+	serviceLogger := s.log.With("component", "service")
 	token, err := s.GenerateToken()
 	if err != nil {
 		return err
@@ -215,8 +216,10 @@ func (s *serviceStruct) SendEmail(ctx context.Context, email string, userID int,
 	}
 
 	_, err = s.mail.Emails.SendWithContext(ctx, params)
+	// this println is here cuz I dont have domain to send email from 😭
 	fmt.Println(verifyURL)
 	if err != nil {
+		serviceLogger.ErrorContext(ctx, "failed to send email", "email", email, "error", err)
 		return err
 	}
 	return nil
