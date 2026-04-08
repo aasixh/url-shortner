@@ -29,7 +29,7 @@ type RepositoryInterface interface {
 	RevokeEmailTokens(ctx context.Context, userID int) error
 	InsertEmailToken(ctx context.Context, userID int, HashedToken []byte, expiresAt time.Time) error
 	MarkUserVerified(ctx context.Context, userID int) error
-	ChangePassword(ctx context.Context, userID int, hashedPassword string) error
+	ChangePasswordAndRevoke(ctx context.Context, userID int, hashedPassword string, sessionID int) error
 	GetURLByShortCode(ctx context.Context, shortCode string) (domain.URL, error)
 	GetURLByUserID(ctx context.Context, userID int) ([]domain.URL, error)
 	URLClicked(ctx context.Context, shortCode string) error
@@ -52,6 +52,7 @@ type ServiceInterface interface {
 	RevokeEmailTokens(ctx context.Context, userID int) error
 	SendEmail(ctx context.Context, email string, userID int, expiresAt int) error
 	VerifyEmail(ctx context.Context, token string) error
+	ChangePasswordAndRevoke(ctx context.Context, userID int, password string, sessionID int) error
 	SendForgotPasswordMail(ctx context.Context, email string) error
 	GetLongURL(ctx context.Context, shortCode string) (string, error)
 	URLClicked(ctx context.Context, shortCode string) error
@@ -228,12 +229,12 @@ func (s *serviceStruct) VerifyEmail(ctx context.Context, token string) error {
 	return nil
 }
 
-func (s *serviceStruct) ChangePassword(ctx context.Context, userID int, password string) error {
+func (s *serviceStruct) ChangePasswordAndRevoke(ctx context.Context, userID int, password string, sessionID int) error {
 	hashedPassword, err := hashPassword(password)
 	if err != nil {
 		return err
 	}
-	return s.repo.ChangePassword(ctx, userID, hashedPassword)
+	return s.repo.ChangePasswordAndRevoke(ctx, userID, hashedPassword, sessionID)
 }
 
 func (s *serviceStruct) SendForgotPasswordMail(ctx context.Context, email string) error {

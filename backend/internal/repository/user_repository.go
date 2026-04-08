@@ -254,18 +254,35 @@ func (r *repositoryStruct) MarkUserVerified(ctx context.Context, userID int) err
 	return nil
 }
 
-func (r *repositoryStruct) ChangePassword(ctx context.Context, userID int, hashedPassword string) error {
-	query := `
+func (r *repositoryStruct) ChangePasswordAndRevoke(ctx context.Context, userID int, hashedPassword string, sessionID int) error {
+	query1 := `
 		UPDATE users
 		SET password_hash = $1
 		WHERE user_id = $2
 	`
-	_, err := r.db.Exec(ctx, query, hashedPassword, userID)
+	query2 := `
+		UPDATE sessions
+		SET revoked_at = $1
+		WHERE user_id = $2
+		AND session_id != $3
+	`
+	tx, err := r.db.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	_, err = tx.Exec(ctx, query1, hashedPassword, userID)
 	if err != nil {
 		return err
 	}
 
-	return nil
+	_, err = tx.Exec(ctx, query2, time.Now(), userID, sessionID)
+	if err != nil {
+		return err
+	}
+
+	return tx.Commit(ctx)
 }
 
 func (r *repositoryStruct) GetURLByShortCode(ctx context.Context, shortCode string) (domain.URL, error) {

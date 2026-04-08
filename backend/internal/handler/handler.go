@@ -404,18 +404,31 @@ func (h *Handler) ForgotPassword(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) ResetPassword(w http.ResponseWriter, r *http.Request) {
 	handlerLogger := h.log.With("component", "handler")
-	token := r.URL.Query().Get("token")
-	if token == "" {
+	var user domain.UserRequest
+	if err := json.NewDecoder(r.Body).Decode(&user); err != nil {
+		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
-		if encErr := json.NewEncoder(w).Encode(domain.ErrorResponse{Error: "missing token"}); encErr != nil {
-			return
-		}
+		json.NewEncoder(w).Encode(map[string]string{"error": "invalid JSON"})
 		return
 	}
-	if err := h.service.VerifyEmail(r.Context(), token); err != nil {
+	if user.Password == "" {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "invalid JSON"})
+		return
+	}
+	cookie, _ := r.Cookie("access_token")
+	sessionID, userID, err := h.service.GetByAccessToken(r.Context(), cookie.Value)
+	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(map[string]string{"error": "password reset failed"})
-		handlerLogger.ErrorContext(r.Context(), "verifing email failed", "error", err)
+		handlerLogger.ErrorContext(r.Context(), "getting sessionID failed", "error", err)
+		return
+	}
+	if err := h.service.ChangePasswordAndRevoke(r.Context(), userID, user.Password, sessionID); err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": "password reset failed"})
+		handlerLogger.ErrorContext(r.Context(), "changing password failed", "error", err)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
