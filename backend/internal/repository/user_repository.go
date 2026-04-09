@@ -89,7 +89,7 @@ func (r *Repository) GetUserByEmail(ctx context.Context, email string) (domain.U
 	err := r.db.QueryRow(
 		ctx,
 		query,
-		email).Scan(&user.ID, &user.Name, &user.Email, &user.HashedPassword, &user.CreatedAt)
+		email).Scan(&user.ID, &user.Name, &user.Email, &user.HashedPassword, &user.IsEmailVerified, &user.CreatedAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return domain.User{}, domain.ErrUserDoesNotExist
@@ -110,7 +110,7 @@ func (r *Repository) GetUserByUserID(ctx context.Context, userID int) (domain.Us
 	err := r.db.QueryRow(
 		ctx,
 		query,
-		userID).Scan(&user.ID, &user.Name, &user.Email, &user.HashedPassword, &user.CreatedAt)
+		userID).Scan(&user.ID, &user.Name, &user.Email, &user.HashedPassword, &user.IsEmailVerified, &user.CreatedAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return domain.User{}, domain.ErrUserDoesNotExist
