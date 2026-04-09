@@ -75,3 +75,7 @@ docker-data/
 # ─────────────────────────────────────────────
 *.lock
 migrations/*.lock
+
+# codex / ai tooling
+.codex
+*.codex

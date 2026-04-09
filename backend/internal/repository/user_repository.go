@@ -81,42 +81,70 @@ func (r *Repository) InsertSession(
 
 func (r *Repository) GetUserByEmail(ctx context.Context, email string) (domain.User, error) {
 	start := time.Now()
+
 	query := `
-		SELECT user_id, email, name, password_hash, is_email_verified FROM users
-		WHERE email=$1;
+		SELECT user_id, email, name, password_hash, is_email_verified, created_at
+		FROM users
+		WHERE email = $1;
 	`
+
 	var user domain.User
+
 	err := r.db.QueryRow(
 		ctx,
 		query,
-		email).Scan(&user.ID, &user.Name, &user.Email, &user.HashedPassword, &user.CreatedAt)
+		email,
+	).Scan(
+		&user.ID,               
+		&user.Email,            
+		&user.Name,             
+		&user.HashedPassword,  
+		&user.IsEmailVerified,  // is_email_verified
+		&user.CreatedAt,        // created_at
+	)
+
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return domain.User{}, domain.ErrUserDoesNotExist
 		}
 		return domain.User{}, err
 	}
+
 	r.logSlowQueries(ctx, "GetUserByEmail", start)
 	return user, nil
 }
 
 func (r *Repository) GetUserByUserID(ctx context.Context, userID int) (domain.User, error) {
 	start := time.Now()
+
 	query := `
-		SELECT user_id, email, name, password_hash, is_email_verified FROM users
+		SELECT user_id, email, name, password_hash, is_email_verified, created_at
+		FROM users
 		WHERE user_id = $1;
 	`
+
 	var user domain.User
+
 	err := r.db.QueryRow(
 		ctx,
 		query,
-		userID).Scan(&user.ID, &user.Name, &user.Email, &user.HashedPassword, &user.CreatedAt)
+		userID,
+	).Scan(
+		&user.ID,               
+		&user.Email,            
+		&user.Name,             
+		&user.HashedPassword,   
+		&user.IsEmailVerified,  
+		&user.CreatedAt,        
+	)
+
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return domain.User{}, domain.ErrUserDoesNotExist
 		}
 		return domain.User{}, err
 	}
+
 	r.logSlowQueries(ctx, "GetUserByUserID", start)
 	return user, nil
 }
