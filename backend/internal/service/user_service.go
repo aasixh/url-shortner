@@ -20,10 +20,10 @@ type RepositoryInterface interface {
 	InsertSession(ctx context.Context, userID int, accessTokenHash []byte, refreshTokenHash []byte, accessExpiresAt time.Time, refreshExpiresAt time.Time) error
 	GetUserByEmail(ctx context.Context, email string) (domain.User, error)
 	GetUserByUserID(ctx context.Context, userID int) (domain.User, error)
-	RevokeToken(ctx context.Context, sessionId int) error
+	RevokeToken(ctx context.Context, sessionID int) error
 	GetByRefreshToken(ctx context.Context, refreshToken []byte) (domain.Token, error)
 	GetByAccessToken(ctx context.Context, accessToken []byte) (domain.Token, error)
-	ReplaceTokens(ctx context.Context, accessTokenHash []byte, refreshTokenHash []byte, sessionId int, accessExpiresAt time.Time, refreshExpiresAt time.Time) error
+	ReplaceTokens(ctx context.Context, accessTokenHash []byte, refreshTokenHash []byte, sessionID int, accessExpiresAt time.Time, refreshExpiresAt time.Time) error
 	GetEmailTableByID(ctx context.Context, userID int) (domain.EmailToken, error)
 	GetEmailTableByToken(ctx context.Context, hashedToken []byte) (domain.EmailToken, error)
 	RevokeEmailTokens(ctx context.Context, userID int) error
@@ -38,18 +38,18 @@ type RepositoryInterface interface {
 	DeleteUser(ctx context.Context, userID int) error
 }
 
-type ServiceInterface interface {
+type Service interface {
 	Register(ctx context.Context, email string, name string, password string) (int, error)
 	StoreTokens(ctx context.Context, userID int, accessToken string, refreshToken string, accessExpiresAt time.Time, refreshExpiresAt time.Time) error
 	GenerateToken() (string, error)
 	Login(ctx context.Context, email string, password string) (int, error)
 	RevokeToken(ctx context.Context, refreshToken string) error
-	ReplaceTokens(ctx context.Context, accessToken string, refreshToken string, userId int, accessExpiresAt time.Time, refreshExpiresAt time.Time) error
+	ReplaceTokens(ctx context.Context, accessToken string, refreshToken string, userID int, accessExpiresAt time.Time, refreshExpiresAt time.Time) error
 	GetByRefreshToken(ctx context.Context, refreshToken string) (int, error)
 	GetByAccessToken(ctx context.Context, accessToken string) (int, int, error)
 	GetUserByUserID(ctx context.Context, userID int) (domain.User, error)
 	ValidateAccessToken(ctx context.Context, accessToken string) (int, int, error)
-	CheckEmail(ctx context.Context, email string, userID int) error
+	CheckEmail(ctx context.Context, userID int) error
 	RevokeEmailTokens(ctx context.Context, userID int) error
 	SendEmail(ctx context.Context, email string, userID int, expiresAt int) error
 	VerifyEmail(ctx context.Context, token string) error
@@ -73,7 +73,7 @@ type serviceStruct struct {
 	mail *resend.Client
 }
 
-func NewService(repo RepositoryInterface, log *slog.Logger, mail *resend.Client) ServiceInterface {
+func NewService(repo RepositoryInterface, log *slog.Logger, mail *resend.Client) Service {
 	return &serviceStruct{
 		repo: repo,
 		log:  log,
@@ -92,7 +92,7 @@ func (s *serviceStruct) Register(ctx context.Context, email string, name string,
 		return 0, err
 	}
 
-	if err := s.SendEmail(ctx, email, userID, 1); err != nil {
+	if err = s.SendEmail(ctx, email, userID, 1); err != nil {
 		return userID, err
 	}
 	return userID, nil
@@ -104,7 +104,8 @@ func hashToken(token string) []byte {
 }
 
 func (s *serviceStruct) GenerateToken() (string, error) {
-	b := make([]byte, 32)
+	size := 32
+	b := make([]byte, size)
 	if _, err := rand.Read(b); err != nil {
 		return "", err
 	}
@@ -139,8 +140,8 @@ func (s *serviceStruct) RevokeToken(ctx context.Context, refreshToken string) er
 	return s.repo.RevokeToken(ctx, token.SessionID)
 }
 
-func (s *serviceStruct) ReplaceTokens(ctx context.Context, accessToken string, refreshToken string, userId int, accessExpiresAt time.Time, refreshExpiresAt time.Time) error {
-	return s.repo.ReplaceTokens(ctx, hashToken(accessToken), hashToken(refreshToken), userId, accessExpiresAt, refreshExpiresAt)
+func (s *serviceStruct) ReplaceTokens(ctx context.Context, accessToken string, refreshToken string, userID int, accessExpiresAt time.Time, refreshExpiresAt time.Time) error {
+	return s.repo.ReplaceTokens(ctx, hashToken(accessToken), hashToken(refreshToken), userID, accessExpiresAt, refreshExpiresAt)
 }
 
 func (s *serviceStruct) GetByAccessToken(ctx context.Context, accessToken string) (int, int, error) {
@@ -177,10 +178,10 @@ func (s *serviceStruct) GetByRefreshToken(ctx context.Context, refreshToken stri
 	return token.SessionID, nil
 }
 
-func (s *serviceStruct) CheckEmail(ctx context.Context, email string, userID int) error {
+func (s *serviceStruct) CheckEmail(ctx context.Context, userID int) error {
 	emailTable, err := s.repo.GetEmailTableByID(ctx, userID)
 	if err != nil {
-		if err != domain.ErrTokenNotFound {
+		if errors.Is(err, domain.ErrTokenNotFound) {
 			return err
 		}
 	}
@@ -201,7 +202,9 @@ func (s *serviceStruct) SendEmail(ctx context.Context, email string, userID int,
 		return err
 	}
 	hashedToken := hashToken(token)
-	s.repo.InsertEmailToken(ctx, userID, hashedToken, time.Now().Add(time.Duration(expiresAt)*time.Hour))
+	if err = s.repo.InsertEmailToken(ctx, userID, hashedToken, time.Now().Add(time.Duration(expiresAt)*time.Hour)); err != nil {
+		return err
+	}
 
 	verifyURL := fmt.Sprintf("http://localhost:3000/verify-email?token=%s", token)
 
@@ -216,8 +219,8 @@ func (s *serviceStruct) SendEmail(ctx context.Context, email string, userID int,
 	}
 
 	_, err = s.mail.Emails.SendWithContext(ctx, params)
-	// this println is here cuz I dont have domain to send email from 😭
-	fmt.Println(verifyURL)
+	// this log is here cuz I dont have domain to send email from 😭
+	serviceLogger.InfoContext(ctx, "failed to send email", "email", verifyURL)
 	if err != nil {
 		serviceLogger.ErrorContext(ctx, "failed to send email", "email", email, "error", err)
 		return err
@@ -228,16 +231,16 @@ func (s *serviceStruct) SendEmail(ctx context.Context, email string, userID int,
 func (s *serviceStruct) VerifyEmail(ctx context.Context, token string) error {
 	hashedToken := hashToken(token)
 	emailTable, err := s.repo.GetEmailTableByToken(ctx, hashedToken)
-	if err == domain.ErrTokenNotFound {
+	if errors.Is(err, domain.ErrTokenNotFound) {
 		return domain.ErrEmailVerificationFailed
 	}
 	if err != nil {
 		return err
 	}
-	if err := s.repo.MarkUserVerified(ctx, emailTable.UserID); err != nil {
+	if err = s.repo.MarkUserVerified(ctx, emailTable.UserID); err != nil {
 		return err
 	}
-	if err := s.repo.RevokeEmailTokens(ctx, emailTable.UserID); err != nil {
+	if err = s.repo.RevokeEmailTokens(ctx, emailTable.UserID); err != nil {
 		return err
 	}
 	return nil
@@ -259,13 +262,13 @@ func (s *serviceStruct) SendForgotPasswordMail(ctx context.Context, email string
 		}
 		return err
 	}
-	if _, err := s.repo.GetEmailTableByID(ctx, user.ID); err != nil {
+	if _, err = s.repo.GetEmailTableByID(ctx, user.ID); err != nil {
 		if errors.Is(err, domain.ErrTokenNotFound) {
 			return domain.ErrUserDoesNotExist
 		}
 		return err
 	}
-	if err := s.SendEmail(ctx, email, user.ID, 1); err != nil {
+	if err = s.SendEmail(ctx, email, user.ID, 1); err != nil {
 		return err
 	}
 	return nil
@@ -282,7 +285,7 @@ func (s *serviceStruct) URLClicked(ctx context.Context, shortCode string) error 
 
 func generateCode(n int) (string, error) {
 	code := make([]byte, n)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		num, err := rand.Int(rand.Reader, big.NewInt(int64(len(alphabet))))
 		if err != nil {
 			return "", err
@@ -293,11 +296,12 @@ func generateCode(n int) (string, error) {
 }
 
 func (s *serviceStruct) InsertURL(ctx context.Context, longURL string, userID int) (string, error) {
-	shortCode, err := generateCode(5)
+	maxLength := 5
+	shortCode, err := generateCode(maxLength)
 	if err != nil {
 		return "", err
 	}
-	if err := s.repo.InsertURL(ctx, shortCode, longURL, userID, time.Now()); err != nil {
+	if err = s.repo.InsertURL(ctx, shortCode, longURL, userID, time.Now()); err != nil {
 		return "", err
 	}
 	return shortCode, nil

@@ -11,12 +11,16 @@ import (
 	"github.com/zedmakesense/url-shortner/internal/handler"
 )
 
+type contextKey string
+
+const ReqIDKey contextKey = "req_id"
+
 func loggingMiddleware(log *slog.Logger, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 		reqID := uuid.New().String()
 
-		ctx := context.WithValue(r.Context(), "req_id", reqID)
+		ctx := context.WithValue(r.Context(), ReqIDKey, reqID)
 		r = r.WithContext(ctx)
 
 		rw := &responseWriter{ResponseWriter: w, status: http.StatusOK}
@@ -26,9 +30,9 @@ func loggingMiddleware(log *slog.Logger, next http.Handler) http.Handler {
 
 		var level slog.Level
 		switch {
-		case rw.status >= 500:
+		case rw.status >= http.StatusInternalServerError:
 			level = slog.LevelError
-		case rw.status >= 400:
+		case rw.status >= http.StatusBadRequest:
 			level = slog.LevelWarn
 		default:
 			level = slog.LevelInfo

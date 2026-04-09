@@ -1,13 +1,16 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/url"
 	"os"
 	"strconv"
 	"time"
 
+	// autoloading env config.
 	_ "github.com/joho/godotenv/autoload"
 	"github.com/zedmakesense/url-shortner/internal/domain"
 )
@@ -34,7 +37,7 @@ type LogConfig struct {
 }
 
 type ResendConfig struct {
-	ApiKey string
+	APIKey string
 }
 
 type RedisConfig struct {
@@ -77,6 +80,12 @@ func Load() (*Config, error) {
 	return cfg, nil
 }
 
+func NewLogConfig() *Config {
+	cfg := &Config{}
+	cfg.LoadLogConfig()
+	return cfg
+}
+
 func (c *Config) LoadLogConfig() {
 	c.Log.Level = parseLevel(getEnv("LOG_LEVEL", "debug"))
 	c.Log.Format = getEnv("LOG_FORMAT", "text")
@@ -84,9 +93,9 @@ func (c *Config) LoadLogConfig() {
 }
 
 func (c *Config) LoadResendConfig() error {
-	c.Resend.ApiKey = getEnv("RESEND_API", "")
-	if c.Resend.ApiKey == "" {
-		return domain.ErrResendApiKeyNotFound
+	c.Resend.APIKey = getEnv("RESEND_API", "")
+	if c.Resend.APIKey == "" {
+		return domain.ErrResendAPIKeyNotFound
 	}
 	return nil
 }
@@ -118,7 +127,7 @@ func (c *Config) LoadRedisConfig() error {
 	c.Redis.Port = getEnv("REDIS_PORT", "6379")
 	c.Redis.Password = getEnv("REDIS_PASSWORD", "")
 	if c.Redis.Password == "" {
-		return fmt.Errorf("No Redis password provided")
+		return errors.New("no Redis password provided")
 	}
 	if c.Redis.DialTimeout, err = parseDuration(getEnv("REDIS_DIAL_TIMEOUT", "5")); err != nil {
 		return err
@@ -132,12 +141,6 @@ func (c *Config) LoadRedisConfig() error {
 	return nil
 }
 
-func NewLogConfig() *Config {
-	cfg := &Config{}
-	cfg.LoadLogConfig()
-	return cfg
-}
-
 func (c *Config) LoadDBConfig() error {
 	var err error
 	c.DB.Host = getEnv("DB_HOST_GO", "postgres")
@@ -146,15 +149,15 @@ func (c *Config) LoadDBConfig() error {
 	}
 	c.DB.User = getEnv("DB_USER", "")
 	if c.DB.User == "" {
-		return fmt.Errorf("User not provided for DB")
+		return errors.New("user not provided for DB")
 	}
 	c.DB.Password = getEnv("DB_PASSWORD", "")
 	if c.DB.Password == "" {
-		return fmt.Errorf("Password not provided for DB")
+		return errors.New("password not provided for DB")
 	}
 	c.DB.Name = getEnv("DB_NAME", "")
 	if c.DB.Password == "" {
-		return fmt.Errorf("DB name not provided for DB")
+		return errors.New("db name not provided for DB")
 	}
 	if c.DB.MaxOpenConns, err = parseInt(getEnv("DB_MAX_OPEN_CONNS", "25")); err != nil {
 		return err
@@ -171,20 +174,21 @@ func (c *Config) LoadDBConfig() error {
 	return nil
 }
 
-func (c *Config) DatabaseUrl() string {
-	return fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=disable",
-		url.QueryEscape(c.DB.User),
-		url.QueryEscape(c.DB.Password),
-		c.DB.Host,
-		c.DB.Port,
-		c.DB.Name,
-	)
+func (c *Config) DatabaseURL() string {
+	u := url.URL{
+		Scheme:   "postgres",
+		User:     url.UserPassword(c.DB.User, c.DB.Password),
+		Host:     net.JoinHostPort(c.DB.Host, strconv.Itoa(c.DB.Port)),
+		Path:     "/" + c.DB.Name,
+		RawQuery: "sslmode=disable",
+	}
+	return u.String()
 }
 
 func parseInt(s string) (int, error) {
 	result, err := strconv.Atoi(s)
 	if err != nil {
-		return -1, fmt.Errorf("Invalid %s %w", s, err)
+		return -1, fmt.Errorf("invalid %s %w", s, err)
 	}
 	return result, nil
 }
@@ -198,11 +202,7 @@ func parseDuration(s string) (time.Duration, error) {
 }
 
 func parseBool(s string) bool {
-	if s == "false" {
-		return false
-	} else {
-		return true
-	}
+	return s != "false"
 }
 
 func parseLevel(s string) slog.Level {

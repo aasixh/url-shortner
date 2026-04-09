@@ -27,7 +27,7 @@ func main() {
 	}
 
 	go func() {
-		if err := application.Run(); err != nil {
+		if err = application.Run(); err != nil {
 			log.Error("HTTP server error", "error", err)
 			os.Exit(1)
 		}
@@ -44,7 +44,7 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 	defer cancel()
 
-	if err := application.Shutdown(ctx); err != nil {
+	if err = application.Shutdown(ctx, log); err != nil {
 		log.Error("failed to gracefully shutdown", "error", err)
 	}
 }

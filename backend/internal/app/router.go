@@ -11,8 +11,13 @@ import (
 	"github.com/zedmakesense/url-shortner/internal/service"
 )
 
+const (
+	CORSMaxAge = 300
+)
+
 type responseWriter struct {
 	http.ResponseWriter
+
 	status int
 }
 
@@ -21,7 +26,7 @@ func (rw *responseWriter) WriteHeader(code int) {
 	rw.ResponseWriter.WriteHeader(code)
 }
 
-func NewRouter(service service.ServiceInterface, log *slog.Logger, mail *resend.Client) http.Handler {
+func NewRouter(service service.Service, log *slog.Logger, mail *resend.Client) http.Handler {
 	mux := http.NewServeMux()
 
 	h := handler.NewHandler(service, log, mail)
@@ -47,7 +52,7 @@ func NewRouter(service service.ServiceInterface, log *slog.Logger, mail *resend.
 	mux.HandleFunc("/debug/pprof/", pprof.Index)
 	mux.HandleFunc("/debug/pprof/profile", pprof.Profile)
 
-	mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("GET /health", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, err := w.Write([]byte("OK"))
 		if err != nil {
@@ -60,7 +65,7 @@ func NewRouter(service service.ServiceInterface, log *slog.Logger, mail *resend.
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"},
 		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type"},
 		AllowCredentials: true,
-		MaxAge:           300,
+		MaxAge:           CORSMaxAge,
 	})
 
 	return loggingMiddleware(log, c.Handler(mux))

@@ -32,12 +32,12 @@ func New() (*App, error) {
 
 	log := logger.NewLogger(cfg.Log)
 
-	mail := resend.NewClient(cfg.Resend.ApiKey)
+	mail := resend.NewClient(cfg.Resend.APIKey)
 
-	dbconfig, err := pgxpool.ParseConfig(cfg.DatabaseUrl())
+	dbconfig, err := pgxpool.ParseConfig(cfg.DatabaseURL())
 	if err != nil {
 		log.Error("failed to parse Postgress config", "error", err)
-		return nil, fmt.Errorf("Failed to parse Postgress config: %w", err)
+		return nil, fmt.Errorf("failed to parse Postgress config: %w", err)
 	}
 	if cfg.DB.MaxOpenConns > math.MaxInt32 || cfg.DB.MaxOpenConns < 0 {
 		log.Error("max open connections value out of range for int32", "error", err)
@@ -59,7 +59,7 @@ func New() (*App, error) {
 		return nil, fmt.Errorf("failed to connect to Postgress: %w", err)
 	}
 
-	if err := dbpool.Ping(context.Background()); err != nil {
+	if err = dbpool.Ping(context.Background()); err != nil {
 		log.Error("failed to ping Postgress", "error", err)
 		dbpool.Close()
 		return nil, fmt.Errorf("failed to ping Postgress: %w", err)
@@ -72,9 +72,11 @@ func New() (*App, error) {
 		Password: cfg.Redis.Password,
 		DB:       cfg.Redis.DB,
 	})
-	if err := rdb.Ping(context.Background()).Err(); err != nil {
+	if err = rdb.Ping(context.Background()).Err(); err != nil {
 		log.Error("failed to ping Redis", "error", err)
-		rdb.Close()
+		if err = rdb.Close(); err != nil {
+			log.Error("rdb.Close", "error", err)
+		}
 	}
 
 	log.Info("redis connection established")
@@ -104,9 +106,11 @@ func (a *App) Run() error {
 	return a.server.ListenAndServe()
 }
 
-func (a *App) Shutdown(ctx context.Context) error {
-	a.log.Info("shutting down server")
+func (a *App) Shutdown(ctx context.Context, log *slog.Logger) error {
+	a.log.InfoContext(ctx, "shutting down server")
 	a.db.Close()
-	a.redis.Close()
+	if err := a.redis.Close(); err != nil {
+		log.ErrorContext(ctx, "rdb.Close", "error", err)
+	}
 	return a.server.Shutdown(ctx)
 }

@@ -13,21 +13,21 @@ import (
 	"github.com/zedmakesense/url-shortner/internal/domain"
 )
 
-type repositoryStruct struct {
+type Repository struct {
 	db  *pgxpool.Pool
 	rdb *redis.Client
 	log *slog.Logger
 }
 
-func NewRepository(db *pgxpool.Pool, rdb *redis.Client, log *slog.Logger) *repositoryStruct {
-	return &repositoryStruct{
+func NewRepository(db *pgxpool.Pool, rdb *redis.Client, log *slog.Logger) *Repository {
+	return &Repository{
 		db:  db,
 		rdb: rdb,
 		log: log,
 	}
 }
 
-func (r *repositoryStruct) logSlowQueries(ctx context.Context, op string, start time.Time) {
+func (r *Repository) logSlowQueries(ctx context.Context, op string, start time.Time) {
 	if elapsed := time.Since(start); elapsed > 100*time.Millisecond {
 		r.log.WarnContext(ctx, "slow query",
 			"operation", op,
@@ -36,7 +36,7 @@ func (r *repositoryStruct) logSlowQueries(ctx context.Context, op string, start 
 	}
 }
 
-func (r *repositoryStruct) InsertUser(ctx context.Context, email string, name string, hashedPassword string) (int, error) {
+func (r *Repository) InsertUser(ctx context.Context, email string, name string, hashedPassword string) (int, error) {
 	start := time.Now()
 	const query = `
 		INSERT INTO users (email, name, password_hash)
@@ -57,7 +57,7 @@ func (r *repositoryStruct) InsertUser(ctx context.Context, email string, name st
 	return userID, nil
 }
 
-func (r *repositoryStruct) InsertSession(ctx context.Context, userID int, accessTokenHash []byte, refreshTokenHash []byte, accessExpiresAt time.Time, refreshExpiresAt time.Time) error {
+func (r *Repository) InsertSession(ctx context.Context, userID int, accessTokenHash []byte, refreshTokenHash []byte, accessExpiresAt time.Time, refreshExpiresAt time.Time) error {
 	start := time.Now()
 	query := `
 		INSERT INTO sessions (user_id, access_token_hash, refresh_token_hash, access_expires_at, refresh_expires_at)
@@ -72,10 +72,10 @@ func (r *repositoryStruct) InsertSession(ctx context.Context, userID int, access
 	return nil
 }
 
-func (r *repositoryStruct) GetUserByEmail(ctx context.Context, email string) (domain.User, error) {
+func (r *Repository) GetUserByEmail(ctx context.Context, email string) (domain.User, error) {
 	start := time.Now()
 	query := `
-		SELECT * FROM users
+		SELECT user_id, email, name, password_hash, is_email_verified FROM users
 		WHERE email=$1;
 	`
 	var user domain.User
@@ -90,10 +90,10 @@ func (r *repositoryStruct) GetUserByEmail(ctx context.Context, email string) (do
 	return user, nil
 }
 
-func (r *repositoryStruct) GetUserByUserID(ctx context.Context, userID int) (domain.User, error) {
+func (r *Repository) GetUserByUserID(ctx context.Context, userID int) (domain.User, error) {
 	start := time.Now()
 	query := `
-		SELECT * FROM users
+		SELECT user_id, email, name, password_hash, is_email_verified FROM users
 		WHERE user_id = $1;
 	`
 	var user domain.User
@@ -108,13 +108,13 @@ func (r *repositoryStruct) GetUserByUserID(ctx context.Context, userID int) (dom
 	return user, nil
 }
 
-func (r *repositoryStruct) RevokeAllTokens(ctx context.Context, userId int, sessionId int) error {
+func (r *Repository) RevokeAllTokens(ctx context.Context, userID int, sessionID int) error {
 	start := time.Now()
 	query := `
 		UPDATE sessions SET revoked_at = $1
 		WHERE user_id=$2 AND session_id != $3;
 	`
-	_, err := r.db.Exec(ctx, query, time.Now(), userId, sessionId)
+	_, err := r.db.Exec(ctx, query, time.Now(), userID, sessionID)
 
 	if err != nil {
 		return err
@@ -124,13 +124,13 @@ func (r *repositoryStruct) RevokeAllTokens(ctx context.Context, userId int, sess
 	return nil
 }
 
-func (r *repositoryStruct) RevokeToken(ctx context.Context, sessionId int) error {
+func (r *Repository) RevokeToken(ctx context.Context, sessionID int) error {
 	start := time.Now()
 	query := `
 		UPDATE sessions SET revoked_at = $1
 		WHERE session_id=$2;
 	`
-	cmdTag, err := r.db.Exec(ctx, query, time.Now(), sessionId)
+	cmdTag, err := r.db.Exec(ctx, query, time.Now(), sessionID)
 
 	if err != nil {
 		return err
@@ -144,7 +144,7 @@ func (r *repositoryStruct) RevokeToken(ctx context.Context, sessionId int) error
 	return nil
 }
 
-func (r *repositoryStruct) GetByAccessToken(ctx context.Context, accessToken []byte) (domain.Token, error) {
+func (r *Repository) GetByAccessToken(ctx context.Context, accessToken []byte) (domain.Token, error) {
 	start := time.Now()
 	query := `
 		SELECT session_id, user_id, access_token_hash, access_expires_at, revoked_at FROM sessions
@@ -165,7 +165,7 @@ func (r *repositoryStruct) GetByAccessToken(ctx context.Context, accessToken []b
 	return token, nil
 }
 
-func (r *repositoryStruct) GetByRefreshToken(ctx context.Context, refreshToken []byte) (domain.Token, error) {
+func (r *Repository) GetByRefreshToken(ctx context.Context, refreshToken []byte) (domain.Token, error) {
 	start := time.Now()
 	query := `
 		SELECT session_id, user_id, refresh_token_hash, refresh_expires_at, revoked_at FROM sessions
@@ -186,7 +186,7 @@ func (r *repositoryStruct) GetByRefreshToken(ctx context.Context, refreshToken [
 	return token, nil
 }
 
-func (r *repositoryStruct) ReplaceTokens(ctx context.Context, accessTokenHash []byte, refreshTokenHash []byte, sessionId int, accessExpiresAt time.Time, refreshExpiresAt time.Time) error {
+func (r *Repository) ReplaceTokens(ctx context.Context, accessTokenHash []byte, refreshTokenHash []byte, sessionID int, accessExpiresAt time.Time, refreshExpiresAt time.Time) error {
 	start := time.Now()
 	query := `
 		UPDATE sessions
@@ -194,7 +194,7 @@ func (r *repositoryStruct) ReplaceTokens(ctx context.Context, accessTokenHash []
 	  WHERE session_id = $5;
   `
 
-	_, err := r.db.Exec(ctx, query, accessTokenHash, refreshTokenHash, accessExpiresAt, refreshExpiresAt, sessionId)
+	_, err := r.db.Exec(ctx, query, accessTokenHash, refreshTokenHash, accessExpiresAt, refreshExpiresAt, sessionID)
 	if err != nil {
 		return err
 	}
@@ -203,10 +203,10 @@ func (r *repositoryStruct) ReplaceTokens(ctx context.Context, accessTokenHash []
 	return nil
 }
 
-func (r *repositoryStruct) GetEmailTableByID(ctx context.Context, userID int) (domain.EmailToken, error) {
+func (r *Repository) GetEmailTableByID(ctx context.Context, userID int) (domain.EmailToken, error) {
 	start := time.Now()
 	query := `
-		SELECT * FROM email_table
+		SELECT id, user_id, token_hash, expires_at, used_at, created_at FROM email_table
 		WHERE user_id = $1
 	`
 	var token domain.EmailToken
@@ -222,10 +222,10 @@ func (r *repositoryStruct) GetEmailTableByID(ctx context.Context, userID int) (d
 	return token, nil
 }
 
-func (r *repositoryStruct) GetEmailTableByToken(ctx context.Context, hashedToken []byte) (domain.EmailToken, error) {
+func (r *Repository) GetEmailTableByToken(ctx context.Context, hashedToken []byte) (domain.EmailToken, error) {
 	start := time.Now()
 	query := `
-		SELECT * FROM email_table
+		SELECT id, user_id, token_hash, expires_at, used_at, created_at FROM email_table
 		WHERE token_hash = $1
 		 	AND used_at IS NULL
 	 		AND expires_at > NOW()
@@ -243,7 +243,7 @@ func (r *repositoryStruct) GetEmailTableByToken(ctx context.Context, hashedToken
 	return token, nil
 }
 
-func (r *repositoryStruct) RevokeEmailTokens(ctx context.Context, userID int) error {
+func (r *Repository) RevokeEmailTokens(ctx context.Context, userID int) error {
 	start := time.Now()
 	query := `
 		UPDATE email_table
@@ -259,13 +259,13 @@ func (r *repositoryStruct) RevokeEmailTokens(ctx context.Context, userID int) er
 	return nil
 }
 
-func (r *repositoryStruct) InsertEmailToken(ctx context.Context, userID int, HashedToken []byte, expiresAt time.Time) error {
+func (r *Repository) InsertEmailToken(ctx context.Context, userID int, hashedToken []byte, expiresAt time.Time) error {
 	start := time.Now()
 	query := `
 	INSERT INTO email_table (user_id, token_hash, expires_at)
 	VALUES ($1, $2, $3)
 	`
-	_, err := r.db.Query(ctx, query, userID, HashedToken, expiresAt)
+	rows, err := r.db.Query(ctx, query, userID, hashedToken, expiresAt)
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
@@ -273,11 +273,12 @@ func (r *repositoryStruct) InsertEmailToken(ctx context.Context, userID int, Has
 		}
 		return err
 	}
+	defer rows.Close()
 	r.logSlowQueries(ctx, "InsertEmailToken", start)
 	return nil
 }
 
-func (r *repositoryStruct) MarkUserVerified(ctx context.Context, userID int) error {
+func (r *Repository) MarkUserVerified(ctx context.Context, userID int) error {
 	start := time.Now()
 	query := `
 		UPDATE users
@@ -293,7 +294,7 @@ func (r *repositoryStruct) MarkUserVerified(ctx context.Context, userID int) err
 	return nil
 }
 
-func (r *repositoryStruct) ChangePasswordAndRevoke(ctx context.Context, userID int, hashedPassword string, sessionID int) error {
+func (r *Repository) ChangePasswordAndRevoke(ctx context.Context, userID int, hashedPassword string, sessionID int) error {
 	start := time.Now()
 	query1 := `
 		UPDATE users
@@ -310,7 +311,12 @@ func (r *repositoryStruct) ChangePasswordAndRevoke(ctx context.Context, userID i
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback(ctx)
+
+	defer func() {
+		if err != nil {
+			_ = tx.Rollback(ctx)
+		}
+	}()
 
 	_, err = tx.Exec(ctx, query1, hashedPassword, userID)
 	if err != nil {
@@ -326,10 +332,10 @@ func (r *repositoryStruct) ChangePasswordAndRevoke(ctx context.Context, userID i
 	return tx.Commit(ctx)
 }
 
-func (r *repositoryStruct) GetURLByShortCode(ctx context.Context, shortCode string) (domain.URL, error) {
+func (r *Repository) GetURLByShortCode(ctx context.Context, shortCode string) (domain.URL, error) {
 	start := time.Now()
 	query := `
-		SELECT * FROM urls
+		SELECT id, short_code, long_url, user_id, created_at, expires_at, click_count FROM urls
 		WHERE short_code = $1
 	`
 	var url domain.URL
@@ -344,10 +350,10 @@ func (r *repositoryStruct) GetURLByShortCode(ctx context.Context, shortCode stri
 	return url, nil
 }
 
-func (r *repositoryStruct) GetURLByUserID(ctx context.Context, userID int) ([]domain.URL, error) {
+func (r *Repository) GetURLByUserID(ctx context.Context, userID int) ([]domain.URL, error) {
 	start := time.Now()
 	query := `
-		SELECT * FROM urls
+		SELECT id, short_code, long_url, user_id, created_at, expires_at, click_count FROM urls
 		WHERE user_id = $1
 	`
 	rows, err := r.db.Query(ctx, query, userID)
@@ -359,7 +365,7 @@ func (r *repositoryStruct) GetURLByUserID(ctx context.Context, userID int) ([]do
 	var urls []domain.URL
 	for rows.Next() {
 		var u domain.URL
-		if err := rows.Scan(
+		if err = rows.Scan(
 			&u.ID,
 			&u.ShortCode,
 			&u.LongURL,
@@ -372,7 +378,7 @@ func (r *repositoryStruct) GetURLByUserID(ctx context.Context, userID int) ([]do
 		}
 		urls = append(urls, u)
 	}
-	if err := rows.Err(); err != nil {
+	if err = rows.Err(); err != nil {
 		return nil, err
 	}
 
@@ -380,13 +386,13 @@ func (r *repositoryStruct) GetURLByUserID(ctx context.Context, userID int) ([]do
 	return urls, nil
 }
 
-func (r *repositoryStruct) InsertURL(ctx context.Context, shortCode string, longURL string, userID int, createdAt time.Time) error {
+func (r *Repository) InsertURL(ctx context.Context, shortCode string, longURL string, userID int, createdAt time.Time) error {
 	start := time.Now()
 	query := `
 		INSERT INTO urls (short_code, long_url, user_id, created_at)
 		VALUES($1, $2, $3, $4)
 	`
-	_, err := r.db.Query(ctx, query, shortCode, longURL, userID, createdAt)
+	rows, err := r.db.Query(ctx, query, shortCode, longURL, userID, createdAt)
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
@@ -394,18 +400,19 @@ func (r *repositoryStruct) InsertURL(ctx context.Context, shortCode string, long
 		}
 		return err
 	}
+	defer rows.Close()
 	r.logSlowQueries(ctx, "InsertURL", start)
 	return nil
 }
 
-func (r *repositoryStruct) URLClicked(ctx context.Context, shortCode string) error {
+func (r *Repository) URLClicked(ctx context.Context, shortCode string) error {
 	start := time.Now()
 	query := `
 		UPDATE urls
 		SET click_count = click_count + 1
 		WHERE short_code = $1;
 	`
-	_, err := r.db.Query(ctx, query, shortCode)
+	rows, err := r.db.Query(ctx, query, shortCode)
 
 	if err != nil {
 		var pgErr *pgconn.PgError
@@ -414,18 +421,19 @@ func (r *repositoryStruct) URLClicked(ctx context.Context, shortCode string) err
 		}
 		return err
 	}
+	defer rows.Close()
 	r.logSlowQueries(ctx, "URLClicked", start)
 	return nil
 }
 
-func (r *repositoryStruct) DeleteURLByShortCode(ctx context.Context, shortCode string) error {
+func (r *Repository) DeleteURLByShortCode(ctx context.Context, shortCode string) error {
 	start := time.Now()
 	query := `
 		DELETE FROM urls
 		WHERE short_code = $1
 	`
 
-	_, err := r.db.Query(ctx, query, shortCode)
+	rows, err := r.db.Query(ctx, query, shortCode)
 
 	if err != nil {
 		var pgErr *pgconn.PgError
@@ -434,17 +442,18 @@ func (r *repositoryStruct) DeleteURLByShortCode(ctx context.Context, shortCode s
 		}
 		return err
 	}
+	defer rows.Close()
 	r.logSlowQueries(ctx, "DeleteURLByShortCode", start)
 	return nil
 }
 
-func (r *repositoryStruct) DeleteUser(ctx context.Context, userID int) error {
+func (r *Repository) DeleteUser(ctx context.Context, userID int) error {
 	start := time.Now()
 	query := `
 		DELETE FROM users
 		WHERE user_id = $1
 	`
-	_, err := r.db.Query(ctx, query, userID)
+	rows, err := r.db.Query(ctx, query, userID)
 
 	if err != nil {
 		var pgErr *pgconn.PgError
@@ -453,6 +462,7 @@ func (r *repositoryStruct) DeleteUser(ctx context.Context, userID int) error {
 		}
 		return err
 	}
+	defer rows.Close()
 	r.logSlowQueries(ctx, "DeleteUser", start)
 	return nil
 }

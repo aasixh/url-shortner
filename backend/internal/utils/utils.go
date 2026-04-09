@@ -6,8 +6,5 @@ import (
 
 func IsValidEmail(email string) bool {
 	var emailRegex = regexp.MustCompile(`^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$`)
-	if !emailRegex.MatchString(email) {
-		return false
-	}
-	return true
+	return emailRegex.MatchString(email)
 }

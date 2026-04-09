@@ -1,10 +1,10 @@
 env_files = ["../.env"]
-build_dir = "tmp"
+build_dir = "build"
 
 [build]
-  entrypoint = ["./tmp/main"]
-  bin = "./tmp/main"
-  cmd = "go build -o ./tmp/main ./cmd/server"
+  entrypoint = ["./build/main"]
+  bin = "./build/main"
+  cmd = "go build -o ./build/main ./cmd/server"
   delay = 1000
   exclude_dir = ["migrations"]
   exclude_file = ["Dockerfile"]
