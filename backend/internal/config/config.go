@@ -37,6 +37,7 @@ type LogConfig struct {
 }
 
 type ResendConfig struct {
+	// gosec G117
 	APIKey string
 }
 
@@ -51,9 +52,10 @@ type RedisConfig struct {
 }
 
 type DBConfig struct {
-	Host            string
-	Port            int
-	User            string
+	Host string
+	Port int
+	User string
+	// gosec G117
 	Password        string
 	Name            string
 	MaxOpenConns    int

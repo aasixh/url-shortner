@@ -22,8 +22,9 @@ type UserResponse struct {
 }
 
 type UserRequest struct {
-	Name     string `json:"name"`
-	Email    string `json:"email"`
+	Name  string `json:"name"`
+	Email string `json:"email"`
+	// gosec G117
 	Password string `json:"password"`
 }
 
