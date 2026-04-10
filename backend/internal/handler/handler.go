@@ -440,7 +440,8 @@ func (h *Handler) ResetPassword(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
-	if err := h.service.VerifyEmail(r.Context(), token); err != nil {
+	userID, err := h.service.VerifyEmailToken(r.Context(), token)
+	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		if encErr := json.NewEncoder(w).Encode(errorResponse{Error: "password reset failed"}); encErr != nil {
 			return
@@ -466,17 +467,8 @@ func (h *Handler) ResetPassword(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
-	cookie, _ := r.Cookie("access_token")
-	sessionID, userID, err := h.service.GetByAccessToken(r.Context(), cookie.Value)
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		if encErr := json.NewEncoder(w).Encode(errorResponse{Error: "password reset failed"}); encErr != nil {
-			return
-		}
-		handlerLogger.ErrorContext(r.Context(), "GeyByAccessToken", "error", err)
-		return
-	}
-	if err = h.service.ChangePasswordAndRevoke(r.Context(), userID, user.Password, sessionID); err != nil {
+
+	if err = h.service.ChangePasswordAndRevoke(r.Context(), userID, user.Password); err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		if encErr := json.NewEncoder(w).Encode(errorResponse{Error: "password reset failed"}); encErr != nil {
 			return

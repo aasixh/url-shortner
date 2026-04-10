@@ -365,7 +365,6 @@ func (r *Repository) ChangePasswordAndRevoke(
 	ctx context.Context,
 	userID int,
 	hashedPassword string,
-	sessionID int,
 ) error {
 	start := time.Now()
 	query1 := `
@@ -377,7 +376,6 @@ func (r *Repository) ChangePasswordAndRevoke(
 		UPDATE sessions
 		SET revoked_at = $1
 		WHERE user_id = $2
-		AND session_id != $3
 	`
 	tx, err := r.db.Begin(ctx)
 	if err != nil {
@@ -395,7 +393,7 @@ func (r *Repository) ChangePasswordAndRevoke(
 		return err
 	}
 
-	_, err = tx.Exec(ctx, query2, time.Now(), userID, sessionID)
+	_, err = tx.Exec(ctx, query2, time.Now(), userID)
 	if err != nil {
 		return err
 	}

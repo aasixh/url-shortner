@@ -42,7 +42,7 @@ type RepositoryInterface interface {
 	RevokeEmailTokens(ctx context.Context, userID int) error
 	InsertEmailToken(ctx context.Context, userID int, HashedToken []byte, expiresAt time.Time) error
 	MarkUserVerified(ctx context.Context, userID int) error
-	ChangePasswordAndRevoke(ctx context.Context, userID int, hashedPassword string, sessionID int) error
+	ChangePasswordAndRevoke(ctx context.Context, userID int, hashedPassword string) error
 	GetURLByShortCode(ctx context.Context, shortCode string) (domain.URL, error)
 	GetURLByUserID(ctx context.Context, userID int) ([]domain.URL, error)
 	URLClicked(ctx context.Context, shortCode string) error
@@ -79,7 +79,8 @@ type Service interface {
 	RevokeEmailTokens(ctx context.Context, userID int) error
 	SendEmail(ctx context.Context, email string, userID int, expiresAt int) error
 	VerifyEmail(ctx context.Context, token string) error
-	ChangePasswordAndRevoke(ctx context.Context, userID int, password string, sessionID int) error
+	VerifyEmailToken(ctx context.Context, token string) (int, error)
+	ChangePasswordAndRevoke(ctx context.Context, userID int, password string) error
 	SendForgotPasswordMail(ctx context.Context, email string) error
 	GetLongURL(ctx context.Context, shortCode string) (string, error)
 	URLClicked(ctx context.Context, shortCode string) error
@@ -307,12 +308,30 @@ func (s *serviceStruct) VerifyEmail(ctx context.Context, token string) error {
 	return nil
 }
 
-func (s *serviceStruct) ChangePasswordAndRevoke(ctx context.Context, userID int, password string, sessionID int) error {
+func (s *serviceStruct) VerifyEmailToken(ctx context.Context, token string) (int, error) {
+	hashedToken := hashToken(token)
+	emailTable, err := s.repo.GetEmailTableByToken(ctx, hashedToken)
+	if errors.Is(err, domain.ErrTokenNotFound) {
+		return 0, domain.ErrEmailVerificationFailed
+	}
+	if err != nil {
+		return 0, err
+	}
+	if err = s.repo.MarkUserVerified(ctx, emailTable.UserID); err != nil {
+		return 0, err
+	}
+	if err = s.repo.RevokeEmailTokens(ctx, emailTable.UserID); err != nil {
+		return 0, err
+	}
+	return emailTable.UserID, nil
+}
+
+func (s *serviceStruct) ChangePasswordAndRevoke(ctx context.Context, userID int, password string) error {
 	hashedPassword, err := hashPassword(password)
 	if err != nil {
 		return err
 	}
-	return s.repo.ChangePasswordAndRevoke(ctx, userID, hashedPassword, sessionID)
+	return s.repo.ChangePasswordAndRevoke(ctx, userID, hashedPassword)
 }
 
 func (s *serviceStruct) SendForgotPasswordMail(ctx context.Context, email string) error {
