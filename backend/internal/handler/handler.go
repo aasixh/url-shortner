@@ -354,7 +354,7 @@ func (h *Handler) Refresh(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.service.RevokeTokens(r.Context(), userID, sessionID); err != nil {
+	if err = h.service.RevokeTokens(r.Context(), userID, sessionID); err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusInternalServerError)
 		if encErr := json.NewEncoder(w).Encode(errorResponse{Error: "Server error"}); encErr != nil {
@@ -451,7 +451,7 @@ func (h *Handler) ResetPassword(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var user domain.UserRequest
-	if err := json.NewDecoder(r.Body).Decode(&user); err != nil {
+	if err = json.NewDecoder(r.Body).Decode(&user); err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
 		if encErr := json.NewEncoder(w).Encode(errorResponse{Error: "invalid JSON"}); encErr != nil {
